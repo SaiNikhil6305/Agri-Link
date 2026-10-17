@@ -1887,8 +1887,8 @@ body {
 
 .ag-form-row {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr 160px;
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) 160px;
+    gap: 14px;
     align-items: flex-end;
 }
 
@@ -6094,6 +6094,91 @@ body {
     }
 }
 
+/* ======================================================== */
+/* 33. FIREBASE GOOGLE AUTHENTICATION & SINGLE-ROLE TRUST   */
+/* ======================================================== */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    margin: 18px 0 14px 0;
+    text-align: center;
+}
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1.5px solid #e2e8f0;
+}
+.auth-divider span {
+    padding: 0 12px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
 
+.btn-google-auth {
+    width: 100%;
+    padding: 12px 18px;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 12px;
+    color: #1e293b;
+    font-size: 0.94rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+.btn-google-auth:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+}
+.btn-google-auth:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+.btn-google-auth svg {
+    flex-shrink: 0;
+}
 
+/* Security Trust Badges */
+.auth-trust-badges {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+.trust-badge-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: #475569;
+    background: #f8fafc;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+}
+.trust-badge-item i {
+    color: #10b981;
+}
 
+/* Enforce Single-Role UI: Permanently hide in-app role switching and view toggle */
+.btn-switch-role,
+#btn-open-role-switch,
+#auth-modal,
+.nav-view-mode-wrapper {
+    display: none !important;
+}

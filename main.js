@@ -4,6 +4,8 @@
 // ========================================================
 
 import { i18n, SUPPORTED_LANGUAGES } from './i18n.js';
+import { signInWithGoogle } from './firebase-auth.js';
+import { ALL_INDIAN_STATES_DISTRICTS } from './indian-states-districts.js';
 
 // ==========================================
 // 1. CONFIGURATION, GLOBAL STATE & STORE
@@ -114,16 +116,6 @@ function initAuthSystem() {
 
     const demoQuickButtons = document.querySelectorAll('.btn-demo-quick');
 
-    // In-App Demonstration Role Switcher Modal (PRESERVED)
-    const authModal = document.getElementById('auth-modal');
-    const roleCards = document.querySelectorAll('.role-card');
-    const btnLoginConfirm = document.getElementById('btn-login-confirm');
-    const btnOpenRoleSwitch = document.getElementById('btn-open-role-switch');
-    const btnCloseRoleModal = document.getElementById('btn-close-role-modal');
-    const userNameInput = document.getElementById('auth-user-name');
-    const userDistrictInput = document.getElementById('auth-district');
-    const roleConfirmLabel = document.getElementById('auth-confirm-role-name');
-    const quickLoginBtns = document.querySelectorAll('.quick-login-btn');
 
     let selectedRole = localStorage.getItem('agri_role') || 'farmer';
     let savedName = localStorage.getItem('agri_name') || 'Ramesh Kumar';
@@ -389,64 +381,108 @@ function initAuthSystem() {
     }
 
     // ----------------------------------------------------
-    // PRESERVED IN-APP DEMONSTRATION ROLE SWITCHER MODAL
+    // GOOGLE AUTHENTICATION & SINGLE-ROLE ENFORCEMENT
     // ----------------------------------------------------
-    function highlightSelectedCard(role) {
-        roleCards.forEach(card => {
-            if (card.dataset.selectRole === role) {
-                card.classList.add('selected');
-            } else {
-                card.classList.remove('selected');
+    const btnIndexGoogleAuth = document.getElementById('btn-index-google-auth');
+    if (btnIndexGoogleAuth) {
+        btnIndexGoogleAuth.addEventListener('click', async () => {
+            hideAuthAlert();
+            const originalHTML = btnIndexGoogleAuth.innerHTML;
+            btnIndexGoogleAuth.disabled = true;
+            btnIndexGoogleAuth.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>Connecting to Google...</span>`;
+
+            try {
+                // 1. Authenticate with Google Popup via Firebase
+                const googleUser = await signInWithGoogle();
+                
+                // 2. Read selected operational role (Farmer, Aggregator, Buyer)
+                const selectedRadio = document.querySelector('input[name="index-google-role"]:checked') || document.querySelector('input[name="reg-role"]:checked');
+                const role = selectedRadio ? selectedRadio.value : 'farmer';
+                
+                showAuthAlert(`Google verified as ${googleUser.displayName}. Establishing workstation session...`, 'success');
+
+                // 3. Register or Login on backend SQLite
+                try {
+                    const res = await fetch(`${API_BASE}/auth/google`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: googleUser.email,
+                            full_name: googleUser.displayName,
+                            fullname: googleUser.displayName,
+                            role: role,
+                            location: 'Regional Mandi',
+                            google_token: googleUser.token
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        localStorage.setItem('agrilink_auth_token', data.token);
+                        localStorage.setItem('agrilink_user', JSON.stringify(data.user));
+                        localStorage.setItem('agri_role', data.user.role);
+                        localStorage.setItem('agri_name', data.user.fullname || data.user.full_name || googleUser.displayName);
+                        localStorage.setItem('agri_district', data.user.location || 'Regional Mandi');
+                        
+                        showAuthAlert(`Welcome, ${data.user.fullname}! Entering ${data.user.role.toUpperCase()} portal...`, 'success');
+                        setTimeout(() => {
+                            showWorkstation();
+                            applyUserRole(data.user.role, data.user.fullname, data.user.location);
+                        }, 500);
+                        return;
+                    }
+                } catch (apiErr) {
+                    console.warn('Backend Google sync note, using verified client session:', apiErr);
+                }
+
+                // Client-side fallback session if backend is momentarily unreachable
+                const fallbackToken = 'ggl-token-' + Date.now();
+                const fallbackUser = {
+                    id: 'USR-GGL-' + googleUser.uid.substring(0, 8),
+                    fullname: googleUser.displayName,
+                    email: googleUser.email,
+                    role: role,
+                    location: 'Regional Mandi'
+                };
+                localStorage.setItem('agrilink_auth_token', fallbackToken);
+                localStorage.setItem('agrilink_user', JSON.stringify(fallbackUser));
+                localStorage.setItem('agri_role', role);
+                localStorage.setItem('agri_name', googleUser.displayName);
+                localStorage.setItem('agri_district', 'Regional Mandi');
+
+                showAuthAlert(`Welcome, ${googleUser.displayName}! Entering ${role.toUpperCase()} portal...`, 'success');
+                setTimeout(() => {
+                    showWorkstation();
+                    applyUserRole(role, googleUser.displayName, 'Regional Mandi');
+                }, 500);
+
+            } catch (err) {
+                console.error('Google Auth Failed:', err);
+                showAuthAlert(err.message || 'Google Sign-In failed or was cancelled. Please try again.');
+            } finally {
+                btnIndexGoogleAuth.disabled = false;
+                btnIndexGoogleAuth.innerHTML = originalHTML;
             }
         });
-        if (roleConfirmLabel) {
-            roleConfirmLabel.textContent = role.charAt(0).toUpperCase() + role.slice(1);
+    }
+
+    // Role radio selection visual feedback
+    document.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            const groupName = radio.name;
+            document.querySelectorAll(`input[name="${groupName}"]`).forEach(r => {
+                r.closest('.reg-role-radio')?.classList.remove('active');
+            });
+            radio.closest('.reg-role-radio')?.classList.add('active');
+        });
+    });
+
+    // Enforce strict Single Role Access (Users cannot switch to unauthorized roles)
+    window.switchRole = function(targetRole) {
+        if (targetRole && targetRole !== AppState.currentRole) {
+            alert(`Access Restricted: Your verified login is bound to the ${AppState.currentRole.toUpperCase()} workstation. Multi-role switching is disabled for security and regulatory compliance.`);
+            return;
         }
-    }
-
-    roleCards.forEach(card => {
-        card.addEventListener('click', () => {
-            selectedRole = card.dataset.selectRole;
-            highlightSelectedCard(selectedRole);
-        });
-    });
-
-    quickLoginBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const role = btn.dataset.role;
-            const name = btn.dataset.name;
-            const loc = btn.dataset.loc;
-            applyUserRole(role, name, loc);
-            if (authModal) authModal.style.display = 'none';
-        });
-    });
-
-    if (btnLoginConfirm) {
-        btnLoginConfirm.addEventListener('click', () => {
-            const name = userNameInput.value.trim() || 'User';
-            const loc = userDistrictInput.value.trim() || 'Regional Mandi';
-            applyUserRole(selectedRole, name, loc);
-            if (authModal) authModal.style.display = 'none';
-        });
-    }
-
-    if (btnOpenRoleSwitch) {
-        btnOpenRoleSwitch.addEventListener('click', () => {
-            if (userNameInput) userNameInput.value = AppState.userName;
-            if (userDistrictInput) userDistrictInput.value = AppState.userLocation;
-            highlightSelectedCard(AppState.currentRole);
-            if (authModal) authModal.style.display = 'flex';
-        });
-    }
-
-    if (btnCloseRoleModal && authModal) {
-        btnCloseRoleModal.addEventListener('click', () => {
-            authModal.style.display = 'none';
-        });
-    }
-
-    window.switchRole = function(role, name, loc) {
-        applyUserRole(role, name || AppState.userName, loc || AppState.userLocation);
     };
 
     // Apply the active role to UI
@@ -545,7 +581,6 @@ function initAuthSystem() {
             savedName = cachedUser.fullname || savedName;
             savedDistrict = cachedUser.location || savedDistrict;
         }
-        highlightSelectedCard(selectedRole);
         applyUserRole(selectedRole, savedName, savedDistrict);
 
         // Verify session in background with FastAPI backend
@@ -2914,6 +2949,7 @@ function renderSettlementReceipt(txn) {
 function initAgmarknetAPI() {
     const form = document.getElementById('agmarknet-form');
     const stateEl = document.getElementById('ag-state');
+    const districtEl = document.getElementById('ag-district');
     const commEl = document.getElementById('ag-commodity');
     const dateEl = document.getElementById('ag-date');
     const loader = document.getElementById('agmarknet-loader');
@@ -2922,6 +2958,39 @@ function initAgmarknetAPI() {
 
     if (dateEl) {
         dateEl.value = new Date().toISOString().split('T')[0];
+    }
+
+    // Populate all 28 Indian States & 8 Union Territories into dropdown
+    if (stateEl) {
+        stateEl.innerHTML = '';
+        const allStates = Object.keys(ALL_INDIAN_STATES_DISTRICTS).sort();
+        allStates.forEach(st => {
+            const opt = document.createElement('option');
+            opt.value = st;
+            opt.textContent = st;
+            if (st === 'Punjab') opt.selected = true;
+            stateEl.appendChild(opt);
+        });
+
+        // Function to dynamically cascade district dropdown
+        function updateDistrictDropdown(selectedState) {
+            if (!districtEl) return;
+            districtEl.innerHTML = '';
+            const districts = ALL_INDIAN_STATES_DISTRICTS[selectedState] || ['All Districts'];
+            districts.forEach(dst => {
+                const opt = document.createElement('option');
+                opt.value = dst;
+                opt.textContent = dst;
+                districtEl.appendChild(opt);
+            });
+        }
+
+        stateEl.addEventListener('change', () => {
+            updateDistrictDropdown(stateEl.value);
+        });
+
+        // Initial population of districts for default State
+        updateDistrictDropdown('Punjab');
     }
 
     // Official MSP Benchmarks for reference
@@ -2937,9 +3006,12 @@ function initAgmarknetAPI() {
     if (form) {
         form.addEventListener('submit', (e) => {
             e.preventDefault();
-            const state = stateEl.value;
+            const state = stateEl ? stateEl.value : 'Punjab';
+            const district = districtEl ? districtEl.value : 'All Districts';
             const commodity = commEl.value;
             const msp = MSP_BENCHMARKS[commodity] || 2200;
+
+            const targetDistrictName = (district === 'All Districts' || !district) ? state : district;
 
             results.style.display = 'none';
             loader.style.display = 'block';
@@ -2948,18 +3020,23 @@ function initAgmarknetAPI() {
                 loader.style.display = 'none';
                 results.style.display = 'block';
 
-                const mandis = [`${state} Central APMC`, `${state} Mandi Yard #1`, `${state} Kisan Mandi`, `${state} Grain Market`];
-                const varieties = ['FAQ (Standard)', 'Grade A Premium', 'Desi Local', 'Hybrid'];
+                const mandis = [
+                    `${targetDistrictName} Principal APMC Mandi`,
+                    `${targetDistrictName} Krishi Upaj Mandi Samiti (KUMS)`,
+                    `${targetDistrictName} Regional Grain & Oilseed Yard`,
+                    `${targetDistrictName} Kisan Wholesale Yard`
+                ];
+                const varieties = ['FAQ (AGMARK Standard)', 'Grade A Premium', 'Desi Certified Hybrid', 'Commercial Bulk'];
 
                 tbody.innerHTML = '';
                 mandis.forEach((mandi, idx) => {
-                    const minPrice = Math.round(msp * 0.98) + (idx * 25);
-                    const maxPrice = minPrice + 150 + (idx * 40);
+                    const minPrice = Math.round(msp * 0.98) + (idx * 28);
+                    const maxPrice = minPrice + 160 + (idx * 35);
                     const modal = Math.round((minPrice + maxPrice) / 2);
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td><strong>${mandi}</strong></td>
+                        <td><strong>${mandi}</strong><br><small style="color: #64748b;"><i class="fas fa-map-marker-alt"></i> ${district}, ${state}</small></td>
                         <td>${commodity}</td>
                         <td>${varieties[idx]}</td>
                         <td>₹${minPrice}</td>
@@ -2969,7 +3046,7 @@ function initAgmarknetAPI() {
                     `;
                     tbody.appendChild(tr);
                 });
-            }, 600);
+            }, 500);
         });
 
         // Trigger initial query
@@ -5151,9 +5228,8 @@ function initAestheticLanguageSelector() {
 // 12. CHRONOLOGICAL WORKFLOW & FOCUSED VIEW CONTROLLER
 // ==========================================
 function initChronologicalFocusedViews() {
-    // Mode state: true = single section focused view (clean, no messy scrolling)
-    // false = full scroll mode (all sections stacked)
-    let isFocusedMode = localStorage.getItem('agri_view_mode') !== 'full';
+    // Mode state: Strictly Single-Section Focused View (Zero full-scroll clutter)
+    const isFocusedMode = true;
 
     // Step definitions chronologically per role
     const ROLE_STEPS = {
@@ -5202,8 +5278,6 @@ function initChronologicalFocusedViews() {
     };
 
     // UI elements
-    const btnToggleViewMode = document.getElementById('btn-toggle-view-mode');
-    const viewModeLabel = document.getElementById('view-mode-label');
     const breadcrumbBar = document.getElementById('focused-view-breadcrumb-bar');
     const btnBreadcrumbBack = document.getElementById('btn-breadcrumb-back');
     const breadcrumbRolePill = document.getElementById('breadcrumb-role-pill');
@@ -5212,24 +5286,7 @@ function initChronologicalFocusedViews() {
     const btnStepPrev = document.getElementById('btn-step-prev');
     const btnStepNext = document.getElementById('btn-step-next');
 
-    // Update the Toggle button visual state
-    function updateToggleModeButton() {
-        if (!btnToggleViewMode || !viewModeLabel) return;
-        const iconSpan = btnToggleViewMode.querySelector('.mode-icon');
-        if (isFocusedMode) {
-            btnToggleViewMode.classList.remove('full-scroll');
-            if (iconSpan) iconSpan.innerHTML = '<i class="fas fa-bullseye"></i>';
-            viewModeLabel.textContent = 'Focused View';
-            btnToggleViewMode.title = 'Current: Focused View (Single section displayed). Click to switch to Full Scroll Mode.';
-        } else {
-            btnToggleViewMode.classList.add('full-scroll');
-            if (iconSpan) iconSpan.innerHTML = '<i class="fas fa-scroll"></i>';
-            viewModeLabel.textContent = 'Full Scroll';
-            btnToggleViewMode.title = 'Current: Full Scroll Mode. Click to switch to Clean Focused View.';
-        }
-    }
-
-    // Show a specific section in Focused or Full Scroll Mode
+    // Show a specific section in Focused Mode (hiding all others)
     function displaySection(targetId, role, smoothScroll = true) {
         if (!targetId) return;
         role = role || AppState.currentRole || 'farmer';
@@ -5335,41 +5392,7 @@ function initChronologicalFocusedViews() {
                     window.scrollTo({ top: Math.max(0, topPos), behavior: 'smooth' });
                 }
             }
-
-        } else {
-            // FULL SCROLL MODE: Show all sections simultaneously
-            if (roleContainer) {
-                const sectionsInRole = roleContainer.querySelectorAll('section, .workflow-roadmap-card, .kisan-quick-hub');
-                sectionsInRole.forEach(sec => {
-                    sec.style.display = 'block';
-                    sec.classList.remove('focused-active-section');
-                });
-            }
-            if (sharedLivePrices) sharedLivePrices.style.display = 'block';
-            if (sharedFlowchart) sharedFlowchart.style.display = 'block';
-            if (breadcrumbBar) breadcrumbBar.style.display = 'none';
-
-            if (smoothScroll && targetId) {
-                const targetEl = document.getElementById(targetId);
-                if (targetEl) {
-                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            }
         }
-    }
-
-    // Toggle between focused and full mode
-    function toggleMode() {
-        isFocusedMode = !isFocusedMode;
-        localStorage.setItem('agri_view_mode', isFocusedMode ? 'focused' : 'full');
-        updateToggleModeButton();
-        const curRole = AppState.currentRole || 'farmer';
-        const currentTarget = activeSectionPerRole[curRole] || `${curRole}-hero`;
-        displaySection(currentTarget, curRole, false);
-    }
-
-    if (btnToggleViewMode) {
-        btnToggleViewMode.addEventListener('click', toggleMode);
     }
 
     // Breadcrumb buttons navigation
@@ -5463,18 +5486,18 @@ function initChronologicalFocusedViews() {
         });
     }
 
-    // Global helper exposed to window
+    // Global helper exposed to window: single-section display
     window.showFocusedSection = function(sectionId) {
         displaySection(sectionId, AppState.currentRole, true);
     };
 
+    // Cross-role guard: Prevents unauthorized workstation hopping
     window.switchRoleAndSection = function(role, sectionId) {
-        if (window.switchRole) {
-            window.switchRole(role);
+        if (role && role !== AppState.currentRole) {
+            alert(`Access Restricted: Your authenticated session is locked to the ${AppState.currentRole.toUpperCase()} workstation. You cannot access other stakeholder workstations without logging in with that respective account.`);
+            return;
         }
-        setTimeout(() => {
-            displaySection(sectionId, role, true);
-        }, 80);
+        displaySection(sectionId, AppState.currentRole, true);
     };
 
     // When role is changed externally
@@ -5483,8 +5506,7 @@ function initChronologicalFocusedViews() {
         displaySection(target, newRole, false);
     };
 
-    // Initial load
-    updateToggleModeButton();
+    // Initial load: render only the overview of active role
     const initialRole = AppState.currentRole || 'farmer';
     displaySection(`${initialRole}-hero`, initialRole, false);
 }

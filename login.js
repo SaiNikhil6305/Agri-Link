@@ -3,6 +3,7 @@
 // ========================================================
 
 import { i18n, SUPPORTED_LANGUAGES } from './i18n.js';
+import { signInWithGoogle } from './firebase-auth.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
@@ -165,12 +166,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Role radio selection visual feedback
-    regRoleRadios.forEach(radio => {
+    // Role radio selection visual feedback (supports reg-role and google-role)
+    document.querySelectorAll('input[type="radio"]').forEach(radio => {
         radio.addEventListener('change', () => {
-            document.querySelectorAll('.reg-role-radio').forEach(lbl => lbl.classList.remove('active'));
-            const parent = radio.closest('.reg-role-radio');
-            if (parent) parent.classList.add('active');
+            const groupName = radio.name;
+            document.querySelectorAll(`input[name="${groupName}"]`).forEach(r => {
+                r.closest('.reg-role-radio')?.classList.remove('active');
+            });
+            radio.closest('.reg-role-radio')?.classList.add('active');
         });
     });
 
@@ -516,7 +519,91 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ----------------------------------------------------
-    // 5. 1-Click Fast Demonstration Logins
+    // 5. Google Authentication (Firebase Modular SDK)
+    // ----------------------------------------------------
+    const btnGoogleAuth = document.getElementById('btn-google-auth');
+    if (btnGoogleAuth) {
+        btnGoogleAuth.addEventListener('click', async () => {
+            hideAlert();
+            const originalHTML = btnGoogleAuth.innerHTML;
+            btnGoogleAuth.disabled = true;
+            btnGoogleAuth.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>Connecting to Google...</span>`;
+
+            try {
+                // 1. Authenticate with Google Popup via Firebase
+                const googleUser = await signInWithGoogle();
+                
+                // 2. Read selected operational role (Farmer, Aggregator, Buyer)
+                const selectedRadio = document.querySelector('input[name="google-role"]:checked') || document.querySelector('input[name="reg-role"]:checked');
+                const role = selectedRadio ? selectedRadio.value : 'farmer';
+                
+                showAlert(`Google verified as ${googleUser.displayName}. Establishing workstation session...`, 'success');
+
+                // 3. Register or Login on backend SQLite
+                try {
+                    const res = await fetch(`${API_BASE}/google`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: googleUser.email,
+                            full_name: googleUser.displayName,
+                            fullname: googleUser.displayName,
+                            role: role,
+                            location: 'Regional Mandi',
+                            google_token: googleUser.token
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        localStorage.setItem('agrilink_auth_token', data.token);
+                        localStorage.setItem('agrilink_user', JSON.stringify(data.user));
+                        localStorage.setItem('agri_role', data.user.role);
+                        localStorage.setItem('agri_name', data.user.fullname || data.user.full_name || googleUser.displayName);
+                        localStorage.setItem('agri_district', data.user.location || 'Regional Mandi');
+                        
+                        showAlert(`Welcome, ${data.user.fullname}! Entering ${data.user.role.toUpperCase()} portal...`, 'success');
+                        setTimeout(() => {
+                            window.location.href = './index.html';
+                        }, 500);
+                        return;
+                    }
+                } catch (apiErr) {
+                    console.warn('Backend Google sync note, using verified client session:', apiErr);
+                }
+
+                // Client-side fallback session if backend is momentarily unreachable
+                const fallbackToken = 'ggl-token-' + Date.now();
+                const fallbackUser = {
+                    id: 'USR-GGL-' + googleUser.uid.substring(0, 8),
+                    fullname: googleUser.displayName,
+                    email: googleUser.email,
+                    role: role,
+                    location: 'Regional Mandi'
+                };
+                localStorage.setItem('agrilink_auth_token', fallbackToken);
+                localStorage.setItem('agrilink_user', JSON.stringify(fallbackUser));
+                localStorage.setItem('agri_role', role);
+                localStorage.setItem('agri_name', googleUser.displayName);
+                localStorage.setItem('agri_district', 'Regional Mandi');
+
+                showAlert(`Welcome, ${googleUser.displayName}! Entering ${role.toUpperCase()} portal...`, 'success');
+                setTimeout(() => {
+                    window.location.href = './index.html';
+                }, 500);
+
+            } catch (err) {
+                console.error('Google Auth Failed:', err);
+                showAlert(extractErrorMessage(err, 'Google Sign-In failed or was cancelled. Please try again.'));
+            } finally {
+                btnGoogleAuth.disabled = false;
+                btnGoogleAuth.innerHTML = originalHTML;
+            }
+        });
+    }
+
+    // ----------------------------------------------------
+    // 6. Fast Demonstration Fallbacks
     // ----------------------------------------------------
     demoButtons.forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -551,7 +638,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('Fast demo API login fallback:', e);
             }
 
-            // Fallback direct demonstration session
             localStorage.setItem('agrilink_auth_token', 'demo-fast-token-' + demoRole);
             localStorage.setItem('agrilink_user', JSON.stringify({
                 fullname: creds.name,

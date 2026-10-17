@@ -195,98 +195,46 @@
                     <i class="fas fa-user-plus"></i> <span data-i18n="auth_btn_register">Register & Enter Workstation</span>
                 </button>
             </form>
-        </div>
-    </div>
 
-    <!-- ======================================================== -->
-    <!-- 2. IN-APP DEMONSTRATION ROLE SWITCHER MODAL              -->
-    <!-- ======================================================== -->
-    <div id="auth-modal" class="auth-modal-backdrop" style="display: none;">
-        <div class="auth-modal-card">
-            <div class="auth-header">
-                <div class="auth-logo">
-                    <i class="fas fa-leaf"></i>
-                    <h2>Agri-Link Role Switcher</h2>
-                </div>
-                <p>Select your operational role to switch between workstations without losing records:</p>
+            <!-- Google Sign-In with Firebase -->
+            <div class="auth-divider">
+                <span>Or Continue With Google</span>
             </div>
 
-            <!-- Role Selector Cards -->
-            <div class="role-cards-grid">
-                <!-- Farmer Role -->
-                <div class="role-card" data-select-role="farmer" id="role-card-farmer">
-                    <div class="role-card-badge"><i class="fas fa-seedling"></i> Kisan / Producer</div>
-                    <div class="role-card-icon"><i class="fas fa-tractor"></i></div>
-                    <h3>Farmer</h3>
-                    <p data-i18n="auth_role_farmer_desc">Real-time agricultural weather station, AI crop quality grading, produce registration, and transparent payout ledger.</p>
-                    <span class="role-color-pill pill-farmer">Theme: Emerald Flora</span>
-                </div>
-
-                <!-- Aggregator Role -->
-                <div class="role-card" data-select-role="aggregator" id="role-card-aggregator">
-                    <div class="role-card-badge"><i class="fas fa-boxes"></i> FPO / Aggregator</div>
-                    <div class="role-card-icon"><i class="fas fa-layer-group"></i></div>
-                    <h3>Aggregator</h3>
-                    <p data-i18n="auth_role_aggregator_desc">Regional farmer inflow queue, produce pooling, certified lot creation, and wholesale marketplace dispatch.</p>
-                    <span class="role-color-pill pill-aggregator">Theme: Harvest Gold</span>
-                </div>
-
-                <!-- Buyer Role -->
-                <div class="role-card" data-select-role="buyer" id="role-card-buyer">
-                    <div class="role-card-badge"><i class="fas fa-building"></i> Institutional Buyer</div>
-                    <div class="role-card-icon"><i class="fas fa-briefcase"></i></div>
-                    <h3>Buyer / Trader</h3>
-                    <p data-i18n="auth_role_buyer_desc">Certified lot marketplace, automated procurement matching engine, and transparent settlement invoicing.</p>
-                    <span class="role-color-pill pill-buyer">Theme: Sapphire Blue</span>
+            <!-- Role Selector for Google Sign-In (Single-Role Enforced) -->
+            <div class="google-auth-role-select" id="google-auth-role-select" style="margin-bottom: 12px;">
+                <label style="font-size: 0.82rem; font-weight: 700; color: #475569; display: block; margin-bottom: 6px;">Select Your Workstation Role for Google Sign-In:</label>
+                <div class="reg-role-options">
+                    <label class="reg-role-radio active" id="index-google-role-farmer">
+                        <input type="radio" name="index-google-role" value="farmer" checked>
+                        <span><i class="fas fa-tractor"></i> Farmer</span>
+                    </label>
+                    <label class="reg-role-radio" id="index-google-role-aggregator">
+                        <input type="radio" name="index-google-role" value="aggregator">
+                        <span><i class="fas fa-layer-group"></i> Aggregator</span>
+                    </label>
+                    <label class="reg-role-radio" id="index-google-role-buyer">
+                        <input type="radio" name="index-google-role" value="buyer">
+                        <span><i class="fas fa-building"></i> Buyer</span>
+                    </label>
                 </div>
             </div>
 
-            <!-- Identity Inputs -->
-            <div class="auth-form-section">
-                <div class="auth-inputs-row">
-                    <div class="auth-input-group">
-                        <label for="auth-user-name"><i class="fas fa-user"></i> Full Name / Organization</label>
-                        <input type="text" id="auth-user-name" placeholder="e.g. Ramesh Kumar (Farmer)" value="Ramesh Kumar">
-                    </div>
-                    <div class="auth-input-group">
-                        <div class="auth-label-row">
-                            <label for="auth-district"><i class="fas fa-map-marker-alt"></i> Region / District</label>
-                            <button type="button" class="btn-auto-detect-link" id="btn-detect-auth-district-link" title="Auto-detect location via GPS or Network">
-                                <i class="fas fa-crosshairs"></i> Auto Detect
-                            </button>
-                        </div>
-                        <div class="auth-input-wrapper has-action-btn">
-                            <i class="fas fa-map-marker-alt auth-field-icon"></i>
-                            <input type="text" id="auth-district" placeholder="e.g. Ludhiana, Punjab" value="Ludhiana, Punjab">
-                            <button type="button" class="btn-detect-location" id="btn-detect-auth-district" title="Auto-detect location">
-                                <i class="fas fa-crosshairs"></i> Auto Detect
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <button type="button" class="btn-google-auth" id="btn-index-google-auth" title="Sign In securely using Google Account">
+                <svg width="20" height="20" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                <span>Sign in with Google</span>
+            </button>
 
-                <div class="auth-action-buttons">
-                    <button id="btn-login-confirm" class="btn btn-auth-primary">
-                        <i class="fas fa-sign-in-alt"></i> Enter <span id="auth-confirm-role-name">Farmer</span> Portal
-                    </button>
-                    <button type="button" class="btn btn-secondary" id="btn-close-role-modal" style="margin-left: 10px;">
-                        Cancel
-                    </button>
-                </div>
-
-                <!-- Fast 1-Click Demo Logins -->
-                <div class="quick-demo-logins">
-                    <span>Quick Demo Switch:</span>
-                    <button type="button" class="quick-login-btn btn-quick-farmer" data-role="farmer" data-name="Ramesh Kumar (Farmer)" data-loc="Ludhiana, Punjab">
-                        🌾 Farmer
-                    </button>
-                    <button type="button" class="quick-login-btn btn-quick-aggregator" data-role="aggregator" data-name="Malwa FPO (Aggregator)" data-loc="Sangrur, Punjab">
-                        📦 Aggregator
-                    </button>
-                    <button type="button" class="quick-login-btn btn-quick-buyer" data-role="buyer" data-name="AgroCorp Trade Desk" data-loc="Delhi Central Mandi">
-                        🏢 Buyer
-                    </button>
-                </div>
+            <!-- Security Trust Badges -->
+            <div class="auth-trust-badges">
+                <span class="trust-badge-item"><i class="fas fa-lock"></i> 256-Bit SSL Secured</span>
+                <span class="trust-badge-item"><i class="fas fa-user-shield"></i> Single-Role Locked</span>
+                <span class="trust-badge-item"><i class="fas fa-shield-alt"></i> PBKDF2 Encrypted</span>
             </div>
         </div>
     </div>
@@ -406,13 +354,9 @@
                         <span id="active-user-display">Ramesh Kumar (Ludhiana)</span>
                     </div>
                 </div>
-                <!-- PRESERVED SWITCH ROLE OPTION -->
-                <button id="btn-open-role-switch" class="btn btn-switch-role" title="Switch between Farmer, Aggregator and Buyer">
-                    <i class="fas fa-sync-alt"></i> <span data-i18n="switch_role">Switch Role</span>
-                </button>
-                <!-- DEDICATED LOGIN PAGE LINK -->
-                <a href="./login.html" id="btn-header-login" class="btn btn-switch-role" style="background: rgba(16, 185, 129, 0.15); border-color: var(--role-primary); color: var(--role-primary); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="Go to Dedicated Login Page">
-                    <i class="fas fa-sign-in-alt"></i> <span data-i18n="nav_login_page">Login Page</span>
+                <!-- DEDICATED LOGIN / SWITCH ACCOUNT LINK -->
+                <a href="./login.html" id="btn-header-login" class="btn btn-switch-role" style="background: rgba(16, 185, 129, 0.15); border-color: var(--role-primary); color: var(--role-primary); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="Switch Account / Login Gateway">
+                    <i class="fas fa-user-circle"></i> <span data-i18n="nav_login_page">Account</span>
                 </a>
                 <!-- WORKING LOGOUT OPTION -->
                 <button id="btn-logout" class="btn btn-logout" title="Sign out of Workstation">
@@ -473,14 +417,6 @@
                     <li><a href="#live-prices" data-target="live-prices"><span class="step-num">8</span><i class="fas fa-chart-line"></i> <span data-i18n="nav_mandi">Mandi Rates</span></a></li>
                     <li><a href="#about-process-flowchart" data-target="about-process-flowchart" class="nav-flowchart-tab"><i class="fas fa-project-diagram"></i> <span data-i18n="nav_flowchart">Process Flowchart</span></a></li>
                 </ul>
-            </div>
-
-            <!-- View Display Mode Switcher (Clean Focused View vs Full Scroll) -->
-            <div class="nav-view-mode-wrapper">
-                <button type="button" class="btn-toggle-view-mode" id="btn-toggle-view-mode" title="Click to toggle between Single-Section Focused Display and Full Scroll Mode">
-                    <span class="mode-icon"><i class="fas fa-bullseye"></i></span>
-                    <span class="mode-label" id="view-mode-label">Focused View</span>
-                </button>
             </div>
         </div>
     </nav>
@@ -2387,18 +2323,15 @@
                     <form id="agmarknet-form" class="agmarknet-form">
                         <div class="ag-form-row">
                             <div class="form-group mb-0">
-                                <label>State</label>
+                                <label><i class="fas fa-map"></i> State / UT</label>
                                 <select id="ag-state" required>
-                                    <option value="Punjab" selected>Punjab</option>
-                                    <option value="Haryana">Haryana</option>
-                                    <option value="Madhya Pradesh">Madhya Pradesh</option>
-                                    <option value="Uttar Pradesh">Uttar Pradesh</option>
-                                    <option value="Maharashtra">Maharashtra</option>
-                                    <option value="Rajasthan">Rajasthan</option>
-                                    <option value="Andhra Pradesh">Andhra Pradesh</option>
-                                    <option value="Telangana">Telangana</option>
-                                    <option value="Gujarat">Gujarat</option>
-                                    <option value="Bihar">Bihar</option>
+                                    <option value="" disabled selected>-- Select State / UT (All 36) --</option>
+                                </select>
+                            </div>
+                            <div class="form-group mb-0">
+                                <label><i class="fas fa-map-marker-alt"></i> District</label>
+                                <select id="ag-district" required>
+                                    <option value="All Districts">All Districts</option>
                                 </select>
                             </div>
                             <div class="form-group mb-0">
@@ -2680,12 +2613,12 @@
                     </div>
                 </div>
                 <div class="footer-col">
-                    <h4>Direct Workstations & Blueprint</h4>
+                    <h4>Platform Architecture & Modules</h4>
                     <ul>
-                        <li><a href="javascript:void(0)" onclick="window.switchRoleAndSection('farmer', 'farmer-hero')">🌾 Farmer Quality & Weather Hub</a></li>
-                        <li><a href="javascript:void(0)" onclick="window.switchRoleAndSection('aggregator', 'aggregator-hero')">📦 FPO Aggregation Desk</a></li>
-                        <li><a href="javascript:void(0)" onclick="window.switchRoleAndSection('buyer', 'buyer-hero')">🏢 Institutional Procurement Desk</a></li>
-                        <li><a href="javascript:void(0)" onclick="window.switchRoleAndSection('farmer', 'crop-scanner')">🔬 Local Deep Learning Scanner</a></li>
+                        <li><a href="javascript:void(0)" onclick="window.showFocusedSection('real-weather-section')">⛅ Weather Advisory & Soil Radar</a></li>
+                        <li><a href="javascript:void(0)" onclick="window.showFocusedSection('crop-scanner')">🔬 AI Crop Quality Inspection</a></li>
+                        <li><a href="javascript:void(0)" onclick="window.showFocusedSection('live-prices')">📈 Live Mandi Benchmark Rates</a></li>
+                        <li><a href="javascript:void(0)" onclick="window.showFocusedSection('procurement-centers-section')">📍 All-India Procurement Centres</a></li>
                         <li><a href="javascript:void(0)" onclick="window.showFocusedSection('about-process-flowchart')">🔄 End-to-End Process Flowchart</a></li>
                     </ul>
                 </div>

@@ -407,6 +407,14 @@ class UserLoginRequest(BaseModel):
     identifier: Optional[str] = None
     password: str
 
+class GoogleAuthRequest(BaseModel):
+    email: str
+    full_name: Optional[str] = None
+    fullname: Optional[str] = None
+    role: Optional[str] = "farmer"
+    location: Optional[str] = "Regional Area"
+    google_token: Optional[str] = None
+
 class FarmerRegistrationRequest(BaseModel):
     farmer_name: str
     phone: str
@@ -1819,6 +1827,58 @@ async def get_current_user(authorization: Optional[str] = Header(None), token: O
     return {
         "authenticated": True,
         "user": dict(user)
+    }
+
+@app.post('/api/auth/google')
+async def google_auth_login(req: GoogleAuthRequest):
+    conn = get_db()
+    cursor = conn.cursor()
+    clean_email = (req.email or "").strip().lower()
+    if not clean_email:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Google email address is required.")
+        
+    cursor.execute("SELECT * FROM users WHERE LOWER(email_or_phone) = ?", (clean_email,))
+    user = cursor.fetchone()
+    
+    now_str = datetime.now().isoformat()
+    if not user:
+        # Create persistent user account for new Google user
+        u_id = f"USR-GGL-{uuid.uuid4().hex[:8].upper()}"
+        clean_name = (req.full_name or req.fullname or clean_email.split('@')[0]).strip()
+        assigned_role = req.role if req.role in ['farmer', 'aggregator', 'buyer'] else 'farmer'
+        assigned_loc = req.location or "Regional Mandi"
+        # Secure tokenized random password hash for federated Google user
+        p_hash, salt = hash_password(uuid.uuid4().hex)
+        cursor.execute('''
+            INSERT INTO users (id, full_name, email_or_phone, password_hash, salt, role, location, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (u_id, clean_name, clean_email, p_hash, salt, assigned_role, assigned_loc, now_str))
+        conn.commit()
+        cursor.execute("SELECT * FROM users WHERE id = ?", (u_id,))
+        user = cursor.fetchone()
+    
+    # Create authenticated session token
+    session_token = str(uuid.uuid4())
+    cursor.execute('''
+        INSERT INTO user_sessions (token, user_id, created_at)
+        VALUES (?, ?, ?)
+    ''', (session_token, user['id'], now_str))
+    conn.commit()
+    conn.close()
+    
+    return {
+        "success": True,
+        "token": session_token,
+        "user": {
+            "id": user['id'],
+            "fullname": user['full_name'],
+            "full_name": user['full_name'],
+            "email": user['email_or_phone'],
+            "email_or_phone": user['email_or_phone'],
+            "role": user['role'],
+            "location": user['location']
+        }
     }
 
 @app.post('/api/auth/logout')
