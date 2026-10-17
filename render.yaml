@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: agri-link
+    env: python
+    buildCommand: "npm install && npm run build && pip install -r ml_backend/requirements.txt"
+    startCommand: "python ml_backend/server.py"
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: HOST
+        value: 0.0.0.0
