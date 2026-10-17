@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { resolve } from 'path';
 
 export default defineConfig({
   server: {
@@ -18,6 +19,14 @@ export default defineConfig({
   preview: {
     host: '0.0.0.0',
     port: 5173
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(import.meta.dirname, 'index.html'),
+        login: resolve(import.meta.dirname, 'login.html')
+      }
+    }
   },
   optimizeDeps: {
     holdUntilCrawlEnd: false,
