@@ -7,7 +7,8 @@
         "supportEmail": "gandrakotasainikhil@gmail.com",
         "authorizedRedirectUris": [
           "https://agrilink-d51ae.firebaseapp.com/__/auth/handler",
-          "http://localhost"
+          "http://localhost",
+          "https://agri-link-tm9g.onrender.com"
         ]
       }
     }
