@@ -3,7 +3,15 @@
 // ========================================================
 
 import { i18n, SUPPORTED_LANGUAGES } from './i18n.js';
-import { signInWithGoogle } from './firebase-auth.js';
+import { 
+    signInWithGoogle, 
+    signInWithEmail, 
+    signUpWithEmail, 
+    sendPasswordReset, 
+    saveUserToFirestore,
+    isFirebaseConfigured, 
+    formatFirebaseError 
+} from './firebase-auth.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
@@ -382,7 +390,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ----------------------------------------------------
-    // 3. Login Form Submission
+    // 3. Password Reset via Firebase
+    // ----------------------------------------------------
+    const btnForgotPassword = document.getElementById('btn-forgot-password');
+    if (btnForgotPassword) {
+        btnForgotPassword.addEventListener('click', async (e) => {
+            e.preventDefault();
+            hideAlert();
+            let email = (loginEmailInput?.value || '').trim();
+            if (!email || !email.includes('@')) {
+                email = prompt("Enter your registered email address to receive password reset instructions:", "");
+            }
+            if (!email || !email.trim()) return;
+
+            try {
+                showAlert('<i class="fas fa-spinner fa-spin"></i> Contacting Firebase to send password reset email...', 'loading');
+                await sendPasswordReset(email.trim());
+                showAlert(`Password reset email sent to <strong>${email.trim()}</strong>! Please check your inbox or spam folder.`, 'success');
+            } catch (err) {
+                console.error('Password reset error:', err);
+                showAlert(err.message || 'Could not send password reset email.');
+            }
+        });
+    }
+
+    // ----------------------------------------------------
+    // 4. Login Form Submission (Firebase + SQLite Dual Engine)
     // ----------------------------------------------------
     if (formLogin) {
         formLogin.addEventListener('submit', async (e) => {
@@ -393,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const password = (loginPasswordInput?.value || '').trim();
 
             if (!identifier || !password) {
-                showAlert('Please enter your email/phone and password.');
+                showAlert('Please enter your email and password.');
                 return;
             }
 
@@ -402,6 +435,66 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnLoginSubmit.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Authenticating...`;
             }
 
+            // Dual Engine Strategy:
+            // 1. If it's an email and Firebase is configured, try Firebase Auth first!
+            let authenticatedWithFirebase = false;
+            if (identifier.includes('@') && isFirebaseConfigured()) {
+                try {
+                    const fbUser = await signInWithEmail(identifier, password);
+                    authenticatedWithFirebase = true;
+                    
+                    // Sync Firebase session with backend workstation
+                    const syncRes = await fetch(`${API_BASE}/firebase-login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: fbUser.email,
+                            full_name: fbUser.displayName,
+                            fullname: fbUser.displayName,
+                            token: fbUser.token,
+                            id_token: fbUser.token,
+                            role: 'farmer' // Default or will retain existing role from backend
+                        })
+                    });
+                    
+                    const syncData = await syncRes.json();
+                    if (syncRes.ok && syncData.success) {
+                        localStorage.setItem('agrilink_auth_token', syncData.token);
+                        localStorage.setItem('agrilink_user', JSON.stringify(syncData.user));
+                        localStorage.setItem('agri_role', syncData.user.role);
+                        localStorage.setItem('agri_name', syncData.user.fullname || syncData.user.full_name || 'User');
+                        localStorage.setItem('agri_district', syncData.user.location || 'Regional Yard');
+
+                        // Sync profile to Firestore
+                        saveUserToFirestore(fbUser.uid, {
+                            displayName: syncData.user.fullname || fbUser.displayName,
+                            email: fbUser.email,
+                            role: syncData.user.role || 'farmer',
+                            location: syncData.user.location || 'Regional Yard'
+                        });
+
+                        showAlert(`Firebase verified! Welcome back, ${syncData.user.fullname || 'User'}! Redirecting...`, 'success');
+                        setTimeout(() => {
+                            window.location.href = './index.html';
+                        }, 500);
+                        return;
+                    }
+                } catch (fbErr) {
+                    console.warn('Firebase login check notice:', fbErr);
+                    // If error is invalid password or blocked account, report it immediately
+                    if (fbErr.message && !fbErr.message.includes('No user found')) {
+                        showAlert(fbErr.message);
+                        if (btnLoginSubmit) {
+                            btnLoginSubmit.disabled = false;
+                            btnLoginSubmit.innerHTML = `<i class="fas fa-sign-in-alt"></i> <span data-i18n="auth_btn_login">Sign In to Workstation</span>`;
+                        }
+                        return;
+                    }
+                    // If user was not found in Firebase, proceed to backend direct DB login (supports seeded demo users)
+                }
+            }
+
+            // 2. Standard / Seeded Demo User Backend Authentication
             try {
                 const res = await fetch(`${API_BASE}/login`, {
                     method: 'POST',
@@ -438,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ----------------------------------------------------
-    // 4. Registration Form Submission
+    // 5. Registration Form Submission (Firebase Auth + SQLite Sync)
     // ----------------------------------------------------
     if (formRegister) {
         formRegister.addEventListener('submit', async (e) => {
@@ -472,22 +565,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (btnRegisterSubmit) {
                 btnRegisterSubmit.disabled = true;
-                btnRegisterSubmit.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Registering...`;
+                btnRegisterSubmit.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Creating Account...`;
             }
 
+            // 1. If email registration and Firebase is configured, create in Firebase Auth
+            let fbToken = null;
+            if (email.includes('@') && isFirebaseConfigured()) {
+                try {
+                    const fbUser = await signUpWithEmail(email, password, fullname);
+                    fbToken = fbUser.token;
+                } catch (fbErr) {
+                    console.error('Firebase registration error:', fbErr);
+                    showAlert(fbErr.message || 'Firebase registration error.');
+                    if (btnRegisterSubmit) {
+                        btnRegisterSubmit.disabled = false;
+                        btnRegisterSubmit.innerHTML = `<i class="fas fa-user-plus"></i> <span data-i18n="auth_btn_register">Register & Enter Workstation</span>`;
+                    }
+                    return;
+                }
+            }
+
+            // 2. Persist profile & role in backend database
             try {
-                const res = await fetch(`${API_BASE}/register`, {
+                const endpoint = fbToken ? `${API_BASE}/firebase-login` : `${API_BASE}/register`;
+                const payload = fbToken ? {
+                    email: email,
+                    full_name: fullname,
+                    fullname: fullname,
+                    role: role,
+                    location: location || 'Regional Mandi',
+                    token: fbToken,
+                    id_token: fbToken
+                } : {
+                    full_name: fullname,
+                    fullname: fullname,
+                    email_or_phone: email,
+                    email: email,
+                    password: password,
+                    role: role,
+                    location: location
+                };
+
+                const res = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        full_name: fullname,
-                        fullname: fullname,
-                        email_or_phone: email,
-                        email: email,
-                        password: password,
-                        role: role,
-                        location: location
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await res.json();
@@ -499,7 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.setItem('agri_name', data.user.fullname || data.user.full_name || 'User');
                     localStorage.setItem('agri_district', data.user.location || 'Regional Yard');
 
-                    showAlert('Account created successfully! Entering workstation...', 'success');
+                    showAlert('Account created & verified successfully! Entering workstation...', 'success');
                     setTimeout(() => {
                         window.location.href = './index.html';
                     }, 500);
@@ -508,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (err) {
                 console.warn('Backend register error:', err);
-                showAlert('Connection failed. Please ensure the Python backend server is running.');
+                showAlert('Connection failed. Please ensure the backend server is running.');
             } finally {
                 if (btnRegisterSubmit) {
                     btnRegisterSubmit.disabled = false;
@@ -536,6 +658,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 2. Read selected operational role (Farmer, Aggregator, Buyer)
                 const selectedRadio = document.querySelector('input[name="google-role"]:checked') || document.querySelector('input[name="reg-role"]:checked');
                 const role = selectedRadio ? selectedRadio.value : 'farmer';
+
+                // 2b. Sync profile to Cloud Firestore
+                await saveUserToFirestore(googleUser.uid, {
+                    displayName: googleUser.displayName,
+                    email: googleUser.email,
+                    role: role,
+                    location: 'Regional Mandi'
+                });
                 
                 showAlert(`Google verified as ${googleUser.displayName}. Establishing workstation session...`, 'success');
 
@@ -550,7 +680,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             fullname: googleUser.displayName,
                             role: role,
                             location: 'Regional Mandi',
-                            google_token: googleUser.token
+                            google_token: googleUser.token,
+                            token: googleUser.token,
+                            id_token: googleUser.token
                         })
                     });
 

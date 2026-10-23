@@ -8,8 +8,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script type="module" crossorigin src="/assets/login-B1dX1Hq8.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/firebase-auth-DeOhJj-N.js">
+  <script type="module" crossorigin src="/assets/login-CP4Zqo-r.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/firebase-auth-DZ3PB8HR.js">
   <link rel="stylesheet" crossorigin href="/assets/firebase-auth-DqDXo3lh.css">
 </head>
 <body class="login-page-body">
@@ -73,10 +73,10 @@
             <!-- SIGN IN FORM -->
             <form id="form-login" class="auth-form-body">
                 <div class="form-group mb-0">
-                    <label for="login-email" data-i18n="auth_email_or_phone">Email Address or Mobile Number</label>
+                    <label for="login-email" data-i18n="auth_email">Email Address</label>
                     <div class="auth-input-wrapper">
-                        <i class="fas fa-user-circle auth-field-icon"></i>
-                        <input type="text" id="login-email" placeholder="e.g. farmer@agrilink.in or 9876543210" required autocomplete="username">
+                        <i class="fas fa-envelope auth-field-icon"></i>
+                        <input type="email" id="login-email" placeholder="e.g. farmer@agrilink.in" required autocomplete="username">
                     </div>
                 </div>
                 <div class="form-group mb-0">
@@ -88,6 +88,11 @@
                             <i class="fas fa-eye"></i>
                         </button>
                     </div>
+                </div>
+                <div class="auth-forgot-row" style="display: flex; justify-content: flex-end; margin-top: 6px; margin-bottom: 12px;">
+                    <button type="button" id="btn-forgot-password" class="btn-text-link" style="background: none; border: none; color: #059669; font-size: 0.82rem; font-weight: 600; cursor: pointer; padding: 0;">
+                        <i class="fas fa-key"></i> Forgot Password?
+                    </button>
                 </div>
                 <button type="submit" class="btn-auth-submit" id="btn-login-submit">
                     <i class="fas fa-sign-in-alt"></i> <span data-i18n="auth_btn_login">Sign In to Workstation</span>
@@ -104,10 +109,10 @@
                     </div>
                 </div>
                 <div class="form-group mb-0">
-                    <label for="reg-email" data-i18n="auth_email_or_phone">Email Address or Mobile Number</label>
+                    <label for="reg-email" data-i18n="auth_email">Email Address</label>
                     <div class="auth-input-wrapper">
                         <i class="fas fa-envelope auth-field-icon"></i>
-                        <input type="text" id="reg-email" placeholder="e.g. farmer@agrilink.in or 9876543210" required>
+                        <input type="email" id="reg-email" placeholder="e.g. farmer@agrilink.in" required autocomplete="email">
                     </div>
                 </div>
                 <div class="form-group mb-0">
@@ -201,6 +206,7 @@
 
             <!-- Security Trust Badges -->
             <div class="auth-trust-badges">
+                <span class="trust-badge-item"><i class="fas fa-fire" style="color: #f59e0b;"></i> Firebase Auth</span>
                 <span class="trust-badge-item"><i class="fas fa-lock"></i> 256-Bit SSL Secured</span>
                 <span class="trust-badge-item"><i class="fas fa-user-shield"></i> Single-Role Locked</span>
                 <span class="trust-badge-item"><i class="fas fa-shield-alt"></i> PBKDF2 Encrypted</span>

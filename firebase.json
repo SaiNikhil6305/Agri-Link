@@ -1,0 +1,18 @@
+{
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Agri-Link",
+        "supportEmail": "gandrakotasainikhil@gmail.com",
+        "authorizedRedirectUris": [
+          "https://agrilink-d51ae.firebaseapp.com/__/auth/handler",
+          "http://localhost"
+        ]
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

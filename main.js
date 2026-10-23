@@ -4,7 +4,7 @@
 // ========================================================
 
 import { i18n, SUPPORTED_LANGUAGES } from './i18n.js';
-import { signInWithGoogle } from './firebase-auth.js';
+import { signInWithGoogle, saveUserToFirestore } from './firebase-auth.js';
 import { ALL_INDIAN_STATES_DISTRICTS } from './indian-states-districts.js';
 
 // ==========================================
@@ -398,6 +398,14 @@ function initAuthSystem() {
                 // 2. Read selected operational role (Farmer, Aggregator, Buyer)
                 const selectedRadio = document.querySelector('input[name="index-google-role"]:checked') || document.querySelector('input[name="reg-role"]:checked');
                 const role = selectedRadio ? selectedRadio.value : 'farmer';
+
+                // 2b. Sync profile to Cloud Firestore
+                await saveUserToFirestore(googleUser.uid, {
+                    displayName: googleUser.displayName,
+                    email: googleUser.email,
+                    role: role,
+                    location: 'Regional Mandi'
+                });
                 
                 showAuthAlert(`Google verified as ${googleUser.displayName}. Establishing workstation session...`, 'success');
 
@@ -412,7 +420,9 @@ function initAuthSystem() {
                             fullname: googleUser.displayName,
                             role: role,
                             location: 'Regional Mandi',
-                            google_token: googleUser.token
+                            google_token: googleUser.token,
+                            token: googleUser.token,
+                            id_token: googleUser.token
                         })
                     });
 

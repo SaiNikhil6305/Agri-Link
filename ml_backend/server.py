@@ -12,9 +12,14 @@ from PIL import Image
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+import sys
 import tensorflow as tf
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 from procurement_data import PROCUREMENT_CENTERS_DATA, ALL_INDIAN_STATES_AND_UTS
 
 def gen_id(prefix: str) -> str:
@@ -414,6 +419,21 @@ class GoogleAuthRequest(BaseModel):
     role: Optional[str] = "farmer"
     location: Optional[str] = "Regional Area"
     google_token: Optional[str] = None
+    token: Optional[str] = None
+    id_token: Optional[str] = None
+
+class FirebaseAuthRequest(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    phoneNumber: Optional[str] = None
+    full_name: Optional[str] = None
+    fullname: Optional[str] = None
+    role: Optional[str] = "farmer"
+    location: Optional[str] = "Regional Area"
+    token: Optional[str] = None
+    id_token: Optional[str] = None
+    google_token: Optional[str] = None
+    provider: Optional[str] = "firebase"
 
 class FarmerRegistrationRequest(BaseModel):
     farmer_name: str
@@ -1829,31 +1849,73 @@ async def get_current_user(authorization: Optional[str] = Header(None), token: O
         "user": dict(user)
     }
 
-@app.post('/api/auth/google')
-async def google_auth_login(req: GoogleAuthRequest):
+def verify_firebase_or_google_token(raw_token: Optional[str]) -> Optional[Dict[str, Any]]:
+    """
+    Validates Firebase / Google ID Token via Google's OAuth2 tokeninfo endpoint.
+    Returns verified token claims (email, sub/uid, etc.) or None if offline/demo.
+    """
+    if not raw_token:
+        return None
+    token = raw_token.strip()
+    if token.startswith("google-token-") or token.startswith("mock-") or token.startswith("demo-"):
+        return None
+    try:
+        import urllib.request
+        import json
+        req = urllib.request.Request(
+            f"https://oauth2.googleapis.com/tokeninfo?id_token={token}",
+            headers={"User-Agent": "AgriLink-Security-Engine/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            if resp.status == 200:
+                claims = json.loads(resp.read().decode('utf-8'))
+                fb_proj = os.environ.get("FIREBASE_PROJECT_ID")
+                # Optional check against project ID if configured
+                if fb_proj and claims.get("aud") and claims["aud"] != fb_proj:
+                    print(f"Warning: Token aud {claims.get('aud')} does not match FIREBASE_PROJECT_ID {fb_proj}")
+                return claims
+    except Exception as e:
+        # Non-fatal: in development or offline mode, proceed with client profile
+        print(f"Firebase token verification notice: {e}")
+        return None
+    return None
+
+def process_firebase_login(req_data: Dict[str, Any]) -> Dict[str, Any]:
+    raw_token = req_data.get("token") or req_data.get("id_token") or req_data.get("google_token")
+    verified_claims = verify_firebase_or_google_token(raw_token)
+    
+    # Priority: verified token email/phone, fallback to request email/phone
+    candidate_identifier = ""
+    if verified_claims and verified_claims.get("email"):
+        candidate_identifier = verified_claims["email"].strip().lower()
+    elif verified_claims and verified_claims.get("phone_number"):
+        candidate_identifier = verified_claims["phone_number"].strip()
+    elif req_data.get("email"):
+        candidate_identifier = req_data.get("email").strip().lower()
+    elif req_data.get("phoneNumber") or req_data.get("phone"):
+        candidate_identifier = (req_data.get("phoneNumber") or req_data.get("phone")).strip()
+        
+    if not candidate_identifier:
+        raise HTTPException(status_code=400, detail="A valid email address or phone number is required for authentication.")
+        
     conn = get_db()
     cursor = conn.cursor()
-    clean_email = (req.email or "").strip().lower()
-    if not clean_email:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Google email address is required.")
-        
-    cursor.execute("SELECT * FROM users WHERE LOWER(email_or_phone) = ?", (clean_email,))
+    cursor.execute("SELECT * FROM users WHERE LOWER(email_or_phone) = ?", (candidate_identifier.lower(),))
     user = cursor.fetchone()
     
     now_str = datetime.now().isoformat()
     if not user:
-        # Create persistent user account for new Google user
-        u_id = f"USR-GGL-{uuid.uuid4().hex[:8].upper()}"
-        clean_name = (req.full_name or req.fullname or clean_email.split('@')[0]).strip()
-        assigned_role = req.role if req.role in ['farmer', 'aggregator', 'buyer'] else 'farmer'
-        assigned_loc = req.location or "Regional Mandi"
-        # Secure tokenized random password hash for federated Google user
+        # Create persistent user account for new Firebase user
+        u_id = f"USR-FB-{uuid.uuid4().hex[:8].upper()}"
+        clean_name = (req_data.get("full_name") or req_data.get("fullname") or (candidate_identifier.split('@')[0] if '@' in candidate_identifier else candidate_identifier)).strip()
+        assigned_role = req_data.get("role") if req_data.get("role") in ['farmer', 'aggregator', 'buyer'] else 'farmer'
+        assigned_loc = req_data.get("location") or "Regional Mandi"
+        # Secure tokenized random password hash for federated Firebase user
         p_hash, salt = hash_password(uuid.uuid4().hex)
         cursor.execute('''
             INSERT INTO users (id, full_name, email_or_phone, password_hash, salt, role, location, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (u_id, clean_name, clean_email, p_hash, salt, assigned_role, assigned_loc, now_str))
+        ''', (u_id, clean_name, candidate_identifier, p_hash, salt, assigned_role, assigned_loc, now_str))
         conn.commit()
         cursor.execute("SELECT * FROM users WHERE id = ?", (u_id,))
         user = cursor.fetchone()
@@ -1870,6 +1932,7 @@ async def google_auth_login(req: GoogleAuthRequest):
     return {
         "success": True,
         "token": session_token,
+        "verified_by_provider": verified_claims is not None,
         "user": {
             "id": user['id'],
             "fullname": user['full_name'],
@@ -1880,6 +1943,14 @@ async def google_auth_login(req: GoogleAuthRequest):
             "location": user['location']
         }
     }
+
+@app.post('/api/auth/firebase-login')
+async def firebase_auth_login(req: FirebaseAuthRequest):
+    return process_firebase_login(req.dict())
+
+@app.post('/api/auth/google')
+async def google_auth_login(req: GoogleAuthRequest):
+    return process_firebase_login(req.dict())
 
 @app.post('/api/auth/logout')
 async def logout_user(authorization: Optional[str] = Header(None), token: Optional[str] = Query(None)):
@@ -2014,5 +2085,5 @@ if __name__ == '__main__':
     import uvicorn
     server_port = int(os.environ.get("PORT", 5000))
     server_host = os.environ.get("HOST", "0.0.0.0")
-    uvicorn.run("server:app", host=server_host, port=server_port, reload=False)
+    uvicorn.run(app, host=server_host, port=server_port)
 

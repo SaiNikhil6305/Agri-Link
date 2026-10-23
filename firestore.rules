@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (matches request.auth.uid)
+    // Fields:
+    //   - uid: string (required, immutable)
+    //   - email: string (optional, valid email format)
+    //   - phoneNumber: string (optional, valid phone string)
+    //   - displayName: string (required, 1-100 chars)
+    //   - role: string (required, 'farmer' | 'aggregator' | 'buyer' | 'admin')
+    //   - location: string (optional, max 120 chars)
+    //   - createdAt: timestamp (immutable)
+    //   - updatedAt: timestamp
+    //
+    // Collection: crops
+    // Document ID: cropId (auto-generated or listing identifier)
+    // Fields:
+    //   - cropId: string (required)
+    //   - farmerUid: string (required, matches request.auth.uid)
+    //   - farmerName: string (required, 1-100 chars)
+    //   - cropName: string (required, 1-60 chars)
+    //   - variety: string (optional, max 60 chars)
+    //   - quantityQtl: number (required, > 0, <= 100000)
+    //   - qualityGrade: string (required, 'Grade A' | 'Grade B' | 'Grade C')
+    //   - expectedPricePerQtl: number (required, > 0)
+    //   - location: string (required, max 120 chars)
+    //   - status: string ('available' | 'aggregated' | 'sold' | 'cancelled')
+    //   - createdAt: timestamp (immutable)
+    //
+    // Collection: bids
+    // Document ID: bidId
+    // Fields:
+    //   - bidId: string (required)
+    //   - cropId: string (required)
+    //   - buyerUid: string (required, matches request.auth.uid)
+    //   - buyerName: string (required, 1-100 chars)
+    //   - bidPricePerQtl: number (required, > 0)
+    //   - status: string ('active' | 'accepted' | 'rejected' | 'withdrawn')
+    //   - createdAt: timestamp (immutable)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && ('uid' in resource.data) && request.auth.uid == resource.data.uid;
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function isValidRole(role) {
+      return role in ['farmer', 'aggregator', 'buyer', 'admin'];
+    }
+
+    // ===============================================================
+    // Rules for 'users' Collection (Owner-locked, strict PII isolation)
+    // ===============================================================
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+                    && uidUnchanged()
+                    && hasRequiredFields(['uid', 'displayName', 'role'])
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() > 0
+                    && request.resource.data.displayName.size() <= 100
+                    && isValidRole(request.resource.data.role)
+                    && request.resource.data.role != 'admin'; // Prevent self-elevation to admin
+
+      allow update: if isOwner(userId)
+                    && uidNotModified()
+                    && areImmutableFieldsUnchanged(['uid', 'createdAt'])
+                    && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) // Prevent self-role change
+                    && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 100));
+
+      allow delete: if isOwner(userId);
+    }
+
+    // ===============================================================
+    // Rules for 'crops' Collection (Crop Listings)
+    // ===============================================================
+    match /crops/{cropId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated()
+                    && request.resource.data.farmerUid == request.auth.uid
+                    && hasRequiredFields(['cropName', 'farmerUid', 'quantityQtl', 'expectedPricePerQtl'])
+                    && request.resource.data.cropName is string
+                    && request.resource.data.cropName.size() <= 60
+                    && request.resource.data.quantityQtl is number
+                    && request.resource.data.quantityQtl > 0
+                    && request.resource.data.expectedPricePerQtl is number
+                    && request.resource.data.expectedPricePerQtl > 0;
+
+      allow update: if isAuthenticated()
+                    && (resource.data.farmerUid == request.auth.uid || ('aggregatorUid' in resource.data && resource.data.aggregatorUid == request.auth.uid))
+                    && areImmutableFieldsUnchanged(['farmerUid', 'createdAt']);
+
+      allow delete: if isAuthenticated() && resource.data.farmerUid == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules for 'bids' Collection
+    // ===============================================================
+    match /bids/{bidId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated()
+                    && request.resource.data.buyerUid == request.auth.uid
+                    && hasRequiredFields(['cropId', 'buyerUid', 'bidPricePerQtl'])
+                    && request.resource.data.bidPricePerQtl is number
+                    && request.resource.data.bidPricePerQtl > 0;
+
+      allow update: if isAuthenticated()
+                    && (resource.data.buyerUid == request.auth.uid || resource.data.farmerUid == request.auth.uid)
+                    && areImmutableFieldsUnchanged(['buyerUid', 'cropId', 'createdAt']);
+
+      allow delete: if isAuthenticated() && resource.data.buyerUid == request.auth.uid;
+    }
+
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

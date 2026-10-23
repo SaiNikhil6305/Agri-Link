@@ -63,5 +63,12 @@ ml_backend/scratch*
 *.njsproj
 *.sln
 *.sw?
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+*.env
+
 .agents/
 .claude/
+skills-lock.json
