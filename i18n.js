@@ -59,6 +59,7 @@ export const TRANSLATIONS = {
         auth_portal_subtitle: "Select your operational role to enter your dedicated workstation",
         auth_login_tab: "Sign In",
         auth_register_tab: "Create New Account",
+        auth_email: "Email Address",
         auth_email_or_phone: "Email Address or Mobile Number",
         auth_email_placeholder: "e.g. farmer@agrilink.in or 9876543210",
         auth_password: "Password",
@@ -1031,6 +1032,15 @@ class I18nManager {
     }
 
     t(key, fallback = '') {
+        if (key === 'auth_email') {
+            const dict = TRANSLATIONS[this.currentLang] || TRANSLATIONS.en;
+            if (dict && dict['auth_email']) return dict['auth_email'];
+            const raw = (dict && dict['auth_email_or_phone']) || (TRANSLATIONS.en && TRANSLATIONS.en['auth_email_or_phone']);
+            if (raw) {
+                return raw.split(' or ')[0].split(' या ')[0].split(' किंवा ')[0].split(' లేదా ')[0].split(' அல்லது ')[0].split(' ਜਾਂ ')[0] || 'Email Address';
+            }
+            return 'Email Address';
+        }
         const dict = TRANSLATIONS[this.currentLang] || TRANSLATIONS.en;
         if (dict && dict[key] !== undefined) {
             return dict[key];

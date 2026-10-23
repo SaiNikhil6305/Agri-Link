@@ -98,6 +98,8 @@ export function formatFirebaseError(error) {
             return 'Network error connecting to Firebase. Please check your internet connection.';
         case 'auth/too-many-requests':
             return 'Too many attempts. Access is temporarily suspended. Please try again later.';
+        case 'auth/unauthorized-domain':
+            return `Domain "${typeof window !== 'undefined' ? window.location.hostname : 'current domain'}" is not authorized for Firebase Auth. Please verify that this domain is added in Firebase Console > Authentication > Settings > Authorized Domains.`;
         default:
             return error.message || 'An error occurred during authentication.';
     }
